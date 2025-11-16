@@ -167,7 +167,7 @@ def stage2_metainfo() -> ET.Element:
         raise EnvironmentError("APPSTREAM_APPID environment variable is not set.")
     
     if license:
-        license_elem = ET.SubElement(template_element, "license")
+        license_elem = ET.SubElement(template_element, "project_license")
         license_elem.text = license
     
     if url:
