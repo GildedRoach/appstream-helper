@@ -101,6 +101,16 @@ def scan_installed_files(buildroot: str, xml_root: Optional[ET.Element] = None) 
                 append_provides_element(xml_root, "library", filename)
             elif os.access(path, os.X_OK):
                 append_provides_element(xml_root, "binary", filename)
+            elif "usr/share/applications" in path and filename.endswith(".desktop"):
+                launchable_elem = ET.Element("launchable")
+                launchable_elem.set("type", "desktop-id")
+                launchable_elem.text = filename
+                append_element(xml_root, "provides", launchable_elem)
+            elif "usr/lib/systemd/system" in path and filename.endswith(".service"):
+                service_elem = ET.Element("launchable")
+                service_elem.set("type", "service")
+                service_elem.text = filename
+                append_element(xml_root, "provides", service_elem)
 
 
 def load_xml_document(path: Path) -> ET.Element:
