@@ -1,0 +1,45 @@
+%_terra_appstream_helper terra-appstream-helper
+
+
+
+%terra_appstream(o:) %{lua:
+    posix.setenv("RPM_BUILD_ROOT", rpm.expand("%{buildroot}"))
+    function macro_setenvar(macro, envvar)
+        -- set the environment variable to the value of the macro if the macro is defined
+        local macro_value = rpm.expand('%{' .. macro .. '}')
+        if macro_value ~= '%{' .. macro .. '}' then
+            posix.setenv(envvar, macro_value)
+        end
+    end
+
+    macro_setenvar("appid", "APPSTREAM_APPID")
+    macro_setenvar("license", "APPSTREAM_LICENSE")
+    macro_setenvar("summary", "APPSTREAM_SUMMARY")
+    macro_setenvar("description", "APPSTREAM_DESCRIPTION")
+    macro_setenvar("url", "APPSTREAM_URL")
+    macro_setenvar("appstream_component", "APPSTREAM_COMPONENT_TYPE")
+    macro_setenvar("developer", "APPSTREAM_DEVELOPER")
+    macro_setenvar("org", "APPSTREAM_DEVELOPER_ORG_NAME")
+
+    local override_file = rpm.expand('%{-o*}')
+    if override_file == "" then
+        override_file = nil
+    end
+    -- print(override_file)
+    -- print(posix.getenv("APPSTREAM_APPID"))
+    args = {
+        rpm.expand("%{_terra_appstream_helper}"),
+    }
+    if override_file ~= nil then
+        table.insert(args, "--override " .. override_file)
+    end
+
+    -- todo: Probably make another macro for this lmfao
+    appid = posix.getenv("APPSTREAM_APPID")
+    table.insert(args, " --output " .. appid .. ".metainfo.xml")
+    table.insert(args, "&&" .. " install -Dm644 " .. appid .. ".metainfo.xml " .. rpm.expand("%{buildroot}%{_metainfodir}/" .. appid .. ".metainfo.xml"))
+    local final = table.concat(args, " ")
+    
+    -- finally print that oneliner
+    print(final)
+}
