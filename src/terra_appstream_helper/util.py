@@ -19,7 +19,7 @@ def get_icon_from_type(component_type: str) -> Optional[ET.Element]:
 
     if component_type in icon_type_map:
         icon_elem = ET.Element("icon")
-        icon_elem.set("type", icon_type_map[component_type])
+        icon_elem.set("type", "stock")
         return icon_elem
     return None
 
