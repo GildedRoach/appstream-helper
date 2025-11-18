@@ -14,12 +14,13 @@
 # See the LICENSE file in the root of the repository for more details.
 import argparse
 import os
-from subprocess import CompletedProcess
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Optional
 
-from .xmlutil import merge_xml
+from .util import stage2_metainfo
+
+from .xmlutil import load_xml_document, merge_xml
 
 parser = argparse.ArgumentParser(
     description="Generate merged AppStream metadata from optional overrides and buildroot data.",
@@ -79,11 +80,12 @@ def append_provides_element(
     append_element(xml_root, "provides", new_elem)
 
 
-def scan_installed_files(buildroot: str, xml_root: Optional[ET.Element] = None) -> None:
+def prep_component(buildroot: str, xml_root: Optional[ET.Element] = None) -> None:
     """Scan the buildroot for installed files and append relevant AppStream metadata."""
     if xml_root is None:
         raise ValueError("xml_root must be provided to scan_installed_files.")
 
+    pkgname = os.getenv("RPM_PACKAGE_NAME", "")
     rpm_version = os.getenv("RPM_PACKAGE_VERSION", "unknown")
 
     release_elem = xml_root.find(
@@ -93,6 +95,30 @@ def scan_installed_files(buildroot: str, xml_root: Optional[ET.Element] = None) 
         release_elem = ET.Element("release")
         release_elem.set("version", rpm_version)
         append_element(xml_root, "releases", release_elem)
+        
+    # if package is nightly or git, always edit or append -git or -nightly release
+    release_suffixes = {
+        "-nightly": ("-nightly", " (Nightly)"),
+        "-git": ("-git", " (Git Development Build)"),
+    }
+    
+    for suffix, release_suffix in release_suffixes.items():
+        if pkgname.endswith(suffix):
+            # print in GitHub Actions log format
+            print(f"notice::::Detected package name '{pkgname}' ends with '{suffix}', adjusting AppStream IDs accordingly.")
+            pkgid_elem = xml_root.find("./id")
+            if pkgid_elem is not None and pkgid_elem.text is not None:
+                base_app_id = pkgid_elem.text
+                if not base_app_id.endswith(release_suffix[0]):
+                    pkgid_elem.text = f"{base_app_id}{release_suffix[0]}"
+            name_elem = xml_root.find("./name")
+            if name_elem is not None and name_elem.text is not None:
+                base_name = name_elem.text
+                if not base_name.endswith(release_suffix[1]):
+                    name_elem.text = f"{base_name}{release_suffix[1]}"
+            # adjust release version
+            
+
 
     for dirpath, _, filenames in os.walk(buildroot):
         for filename in filenames:
@@ -106,18 +132,12 @@ def scan_installed_files(buildroot: str, xml_root: Optional[ET.Element] = None) 
                 launchable_elem = ET.Element("launchable")
                 launchable_elem.set("type", "desktop-id")
                 launchable_elem.text = filename
-                append_element(xml_root, "provides", launchable_elem)
+                xml_root.append(launchable_elem)
             elif "usr/lib/systemd/system" in path and filename.endswith(".service"):
                 service_elem = ET.Element("launchable")
                 service_elem.set("type", "service")
                 service_elem.text = filename
-                append_element(xml_root, "provides", service_elem)
-
-
-def load_xml_document(path: Path) -> ET.Element:
-    """Load an XML document from disk and return the root element."""
-    tree = ET.parse(path)
-    return tree.getroot()
+                xml_root.append(service_elem)
 
 
 def find_existing_metainfo(buildroot: str) -> Optional[Path]:
@@ -147,83 +167,6 @@ def find_existing_metainfo(buildroot: str) -> Optional[Path]:
             return match
 
     return None
-
-def stage2_metainfo() -> ET.Element:
-    template_element = ET.Element("component")
-    
-    # Read environment variables
-    app_id = os.getenv("APPSTREAM_APPID")
-    license = os.getenv("APPSTREAM_LICENSE")
-    summary = os.getenv("APPSTREAM_SUMMARY")
-    description = os.getenv("APPSTREAM_DESCRIPTION")
-    url = os.getenv("APPSTREAM_URL")
-    developer_name = os.getenv("APPSTREAM_DEVELOPER_NAME")
-    developer_org_name = os.getenv("APPSTREAM_DEVELOPER_ORG_NAME")
-    component_type = os.getenv("APPSTREAM_COMPONENT_TYPE")
-    pkgname = os.getenv("RPM_PACKAGE_NAME")
-    name_pretty = os.getenv("APPSTREAM_NAME_PRETTY")
-    # pkgversion = os.getenv("RPM_PACKAGE_VERSION")
-    
-    # template components
-    
-    # Implicitly set metadata license to CC0-1.0
-    metadata_license_elem = ET.SubElement(template_element, "metadata_license")
-    metadata_license_elem.text = "CC0-1.0"
-        
-    if component_type:
-        template_element.set("type", component_type)
-        
-    if name_pretty:
-        name_elem = ET.SubElement(template_element, "name")
-        name_elem.text = name_pretty
-
-    if app_id:
-        id_elem = ET.SubElement(template_element, "id")
-        if pkgname and pkgname.endswith("-nightly"):
-            id_elem.text = f"{app_id}-nightly"
-        elif pkgname and pkgname.endswith("-git"):
-            id_elem.text = f"{app_id}-git"
-        else:
-            id_elem.text = app_id
-    else:
-        # error out since we do need an app id
-        raise EnvironmentError("APPSTREAM_APPID environment variable is not set.")
-    
-    if license:
-        license_elem = ET.SubElement(template_element, "project_license")
-        license_elem.text = license
-    
-    if url:
-        url_elem = ET.SubElement(template_element, "url")
-        # type="homepage"
-        url_elem.set("type", "homepage")
-        url_elem.text = url
-    
-    if summary:
-        summary_elem = ET.SubElement(template_element, "summary")
-        summary_elem.text = summary
-        
-
-    if description:
-        #<p>description</p>
-        description_elem = ET.SubElement(template_element, "description")
-        p_elem = ET.SubElement(description_elem, "p")
-        p_elem.text = description
-    elif summary:
-        # Fallback: use summary as description
-        description_elem = ET.SubElement(template_element, "description")
-        p_elem = ET.SubElement(description_elem, "p")
-        p_elem.text = summary
-        
-    if developer_name:
-        developer_elem = ET.SubElement(template_element, "developer")
-        if developer_org_name:
-            developer_elem.set("id", developer_org_name)
-        else:
-            developer_elem.set("id", app_id if app_id else "com.example")
-
-    
-    return template_element
 
 def main(argv: Optional[list[str]] = None) -> None:
     override_path: Optional[Path] = (
@@ -257,7 +200,7 @@ def main(argv: Optional[list[str]] = None) -> None:
     stage2_root = stage2_metainfo()
     merge_xml(base_root, stage2_root)
 
-    scan_installed_files(buildroot, base_root)  # pyright: ignore[reportArgumentType]
+    prep_component(buildroot, base_root)  # pyright: ignore[reportArgumentType]
 
     tree = ET.ElementTree(base_root)
     ET.indent(tree, space="  ", level=0)

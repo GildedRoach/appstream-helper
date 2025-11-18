@@ -10,10 +10,19 @@ discoverability in package managers that support it.
 
 To use the AppStream helper, modify your specfile like so:
 
-```rpmspec
+```spec
 %global appid my.package.id
+%global name_pretty My beautiful Package
+# Sometimes omitted, but most packages must specify it
+%global appstream_component desktop-application
+# Optional fields
 %global developer "Upstream Developer"
-%global org "org.upstream"
+%global org "org.upstream" #RDNS Notation of the developer/organization, e.g the website domain reversed.
+
+# The below is required because %description doesn't provide a macro to infer from
+%global description This is my package description.
+
+
 
 Name: my-package
 Version: 1.0
@@ -21,6 +30,10 @@ Release: 1%{?dist}
 Summary: My Package Summary
 License: MIT
 URL: https://example.com/my-package
+# You're looking at it!
+# requires this package (the one you're reading from right now)
+# to be installed to provide the `%terra_appstream` macro
+BuildRequires: terra-appstream-helper
 
 %description
 ...
@@ -41,7 +54,7 @@ URL: https://example.com/my-package
 
 If you want to customize the AppStream metadata further, you can create a base AppStream metainfo file to merge all other changes into, like so:
 
-```rpmspec
+```spec
 ...
 Source1: com.example.my-package.metainfo.xml
 
@@ -71,7 +84,7 @@ To do this, create a minimal generic metainfo XML file with only the fields you 
 
 Then, in your specfile, use the `-o` option to specify this override file, just like when using a base file:
 
-```rpmspec
+```spec
 %global appid my.package.id
 %global appstream_component desktop-application
 Source1: my-package-override.metainfo.xml

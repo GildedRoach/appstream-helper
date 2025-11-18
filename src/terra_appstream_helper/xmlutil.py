@@ -1,3 +1,4 @@
+from pathlib import Path
 import xml.etree.ElementTree as ET
 from copy import deepcopy
 from typing import Tuple
@@ -52,3 +53,10 @@ def merge_xml(base_xml: ET.Element, additional_xml: ET.Element) -> ET.Element:
             merge_xml(existing_children[match_index], additional_child)
 
     return base_xml
+
+
+
+def load_xml_document(path: Path) -> ET.Element:
+    """Load an XML document from disk and return the root element."""
+    tree = ET.parse(path)
+    return tree.getroot()
