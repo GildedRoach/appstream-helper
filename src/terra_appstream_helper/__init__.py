@@ -19,7 +19,6 @@ from pathlib import Path
 from typing import Optional
 
 from .util import stage2_metainfo
-
 from .xmlutil import load_xml_document, merge_xml
 
 parser = argparse.ArgumentParser(
@@ -95,17 +94,19 @@ def prep_component(buildroot: str, xml_root: Optional[ET.Element] = None) -> Non
         release_elem = ET.Element("release")
         release_elem.set("version", rpm_version)
         append_element(xml_root, "releases", release_elem)
-        
+
     # if package is nightly or git, always edit or append -git or -nightly release
     release_suffixes = {
         "-nightly": ("-nightly", " (Nightly)"),
         "-git": ("-git", " (Git Development Build)"),
     }
-    
+
     for suffix, release_suffix in release_suffixes.items():
         if pkgname.endswith(suffix):
             # print in GitHub Actions log format
-            print(f"notice::::Detected package name '{pkgname}' ends with '{suffix}', adjusting AppStream IDs accordingly.")
+            print(
+                f"notice::::Detected package name '{pkgname}' ends with '{suffix}', adjusting AppStream IDs accordingly."
+            )
             pkgid_elem = xml_root.find("./id")
             if pkgid_elem is not None and pkgid_elem.text is not None:
                 base_app_id = pkgid_elem.text
@@ -117,8 +118,6 @@ def prep_component(buildroot: str, xml_root: Optional[ET.Element] = None) -> Non
                 if not base_name.endswith(release_suffix[1]):
                     name_elem.text = f"{base_name}{release_suffix[1]}"
             # adjust release version
-            
-
 
     for dirpath, _, filenames in os.walk(buildroot):
         for filename in filenames:
@@ -129,8 +128,15 @@ def prep_component(buildroot: str, xml_root: Optional[ET.Element] = None) -> Non
             elif os.access(path, os.X_OK):
                 append_provides_element(xml_root, "binary", filename)
             elif "usr/share/applications" in path and filename.endswith(".desktop"):
-                existing_launchable = xml_root.find(
-                    f"./launchable[@type='desktop-id'][text()='{filename}']"
+                existing_launchable = next(
+                    (
+                        launchable
+                        for launchable in xml_root.findall(
+                            "./launchable[@type='desktop-id']"
+                        )
+                        if launchable.text == filename
+                    ),
+                    None,
                 )
                 if existing_launchable is None:
                     launchable_elem = ET.Element("launchable")
@@ -138,8 +144,15 @@ def prep_component(buildroot: str, xml_root: Optional[ET.Element] = None) -> Non
                     launchable_elem.text = filename
                     xml_root.append(launchable_elem)
             elif "usr/lib/systemd/system" in path and filename.endswith(".service"):
-                existing_service = xml_root.find(
-                    f"./launchable[@type='service'][text()='{filename}']"
+                existing_service = next(
+                    (
+                        launchable
+                        for launchable in xml_root.findall(
+                            "./launchable[@type='service']"
+                        )
+                        if launchable.text == filename
+                    ),
+                    None,
                 )
                 if existing_service is None:
                     service_elem = ET.Element("launchable")
@@ -176,6 +189,7 @@ def find_existing_metainfo(buildroot: str) -> Optional[Path]:
 
     return None
 
+
 def main(argv: Optional[list[str]] = None) -> None:
     override_path: Optional[Path] = (
         args.override.expanduser() if args.override else None
@@ -200,11 +214,10 @@ def main(argv: Optional[list[str]] = None) -> None:
         base_root = existing_root
     else:
         base_root = ET.Element("component")
-    
 
     if override_root is not None and existing_root is not None:
         merge_xml(base_root, existing_root)
-        
+
     stage2_root = stage2_metainfo()
     merge_xml(base_root, stage2_root)
 
