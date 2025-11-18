@@ -129,15 +129,23 @@ def prep_component(buildroot: str, xml_root: Optional[ET.Element] = None) -> Non
             elif os.access(path, os.X_OK):
                 append_provides_element(xml_root, "binary", filename)
             elif "usr/share/applications" in path and filename.endswith(".desktop"):
-                launchable_elem = ET.Element("launchable")
-                launchable_elem.set("type", "desktop-id")
-                launchable_elem.text = filename
-                xml_root.append(launchable_elem)
+                existing_launchable = xml_root.find(
+                    f"./launchable[@type='desktop-id'][text()='{filename}']"
+                )
+                if existing_launchable is None:
+                    launchable_elem = ET.Element("launchable")
+                    launchable_elem.set("type", "desktop-id")
+                    launchable_elem.text = filename
+                    xml_root.append(launchable_elem)
             elif "usr/lib/systemd/system" in path and filename.endswith(".service"):
-                service_elem = ET.Element("launchable")
-                service_elem.set("type", "service")
-                service_elem.text = filename
-                xml_root.append(service_elem)
+                existing_service = xml_root.find(
+                    f"./launchable[@type='service'][text()='{filename}']"
+                )
+                if existing_service is None:
+                    service_elem = ET.Element("launchable")
+                    service_elem.set("type", "service")
+                    service_elem.text = filename
+                    xml_root.append(service_elem)
 
 
 def find_existing_metainfo(buildroot: str) -> Optional[Path]:
