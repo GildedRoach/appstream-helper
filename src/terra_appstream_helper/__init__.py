@@ -161,7 +161,9 @@ def prep_component(buildroot: str, xml_root: Optional[ET.Element] = None) -> Non
             logger.debug("Found installed file: %s", path)
             if filename.endswith(".so") or ".so." in filename:
                 append_provides_element(xml_root, "library", filename)
-            elif os.access(path, os.X_OK):
+            if filename.endswith(".dll") or filename.endswith(".lib"):
+                append_provides_element(xml_root, "library", filename)
+            elif os.access(path, os.X_OK): 
                 append_provides_element(xml_root, "binary", filename)
             elif "usr/share/applications" in path and filename.endswith(".desktop"):
                 existing_launchable = next(
